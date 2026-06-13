@@ -1544,6 +1544,88 @@ export const layer = Layer.effect(
           })
         }
 
+        // discover models for openai-compatible providers with discover flag
+        for (const [id, provider] of Object.entries(providers)) {
+          const providerID = ProviderV2.ID.make(id)
+          const configProvider = cfg.provider?.[providerID]
+          const shouldDiscover = configProvider?.discover ?? Object.keys(provider.models).length === 0
+          if (!shouldDiscover) continue
+          const providerNpm = configProvider?.npm ?? modelsDev[providerID]?.npm
+          if (providerNpm !== undefined && providerNpm !== "@ai-sdk/openai-compatible") continue
+          const baseURL = provider.options?.baseURL
+          if (!baseURL) continue
+
+          yield* Effect.promise(async () => {
+            try {
+              const ctl = new AbortController()
+              const t = setTimeout(() => ctl.abort(), 10_000)
+              try {
+                const res = await fetch(`${baseURL}/v1/models`, {
+                  signal: ctl.signal,
+                  headers: provider.key ? { Authorization: `Bearer ${provider.key}` } : {},
+                })
+                if (!res.ok) return
+                const json = await res.json()
+                const models = json.data
+                if (!Array.isArray(models)) return
+                for (const m of models) {
+                  const modelID = m.id
+                  if (!modelID || typeof modelID !== "string") continue
+                  if (provider.models[modelID]) continue
+                  const name = m.name ?? modelID
+                  provider.models[modelID] = {
+                    id: ModelV2.ID.make(modelID),
+                    name,
+                    providerID,
+                    api: {
+                      id: modelID,
+                      npm: "@ai-sdk/openai-compatible",
+                      url: "",
+                    },
+                    status: "active",
+                    capabilities: {
+                      temperature: true,
+                      reasoning: false,
+                      attachment: false,
+                      toolcall: true,
+                      input: {
+                        text: true,
+                        audio: false,
+                        image: false,
+                        video: false,
+                        pdf: false,
+                      },
+                      output: {
+                        text: true,
+                        audio: false,
+                        image: false,
+                        video: false,
+                        pdf: false,
+                      },
+                      interleaved: false,
+                    },
+                    cost: {
+                      input: 0,
+                      output: 0,
+                      cache: { read: 0, write: 0 },
+                    },
+                    options: {},
+                    limit: { context: 0, output: 0 },
+                    headers: {},
+                    family: "",
+                    release_date: "",
+                    variants: {},
+                  }
+                }
+              } finally {
+                clearTimeout(t)
+              }
+            } catch {
+              // discovery fails silently
+            }
+          })
+        }
+
         for (const [id, provider] of Object.entries(providers)) {
           const providerID = ProviderV2.ID.make(id)
           if (!isProviderAllowed(providerID)) {
