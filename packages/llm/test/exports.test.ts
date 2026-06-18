@@ -3,6 +3,7 @@ import { LLM, LLMClient, Provider } from "@opencode-ai/llm"
 import { Route, Protocol } from "@opencode-ai/llm/route"
 import { Provider as ProviderSubpath } from "@opencode-ai/llm/provider"
 import {
+  AzureOAuth,
   CloudflareAIGateway,
   CloudflareWorkersAI,
   OpenAI,
@@ -29,6 +30,15 @@ describe("public exports", () => {
   })
 
   test("provider barrels expose user-facing facades", () => {
+    expect(AzureOAuth.configure).toBeFunction()
+    expect(
+      AzureOAuth.configure({
+        baseURL: "https://corporate-api.test/v1",
+        tenantId: "test-tenant",
+        clientId: "test-client",
+        clientSecret: "test-secret",
+      }).model,
+    ).toBeFunction()
     expect(OpenAI.model).toBeFunction()
     expect(OpenAI.provider.model).toBe(OpenAI.model)
     expect(OpenAI.provider.responses).toBe(OpenAI.responses)
